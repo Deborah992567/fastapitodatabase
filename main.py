@@ -61,3 +61,48 @@ async def create_questions(Question: QuestionBase, db: db_dependency):
     db.commit()
     return {"message": "Question and choices saved successfully"}
 
+@app.put("/questions/{question_id}")
+async def update_question(
+    question_id: int,
+    updated_question: QuestionBase,
+    db: db_dependency
+):
+    db_question = db.query(models.Questions).filter(models.Questions.id == question_id).first()
+
+    if not db_question:
+        raise HTTPException(status_code=404, detail="Question not found")
+
+    # Update question text
+    db_question.question_text = updated_question.question_text
+
+    # Delete old choices first (so you don't get duplicates)
+    db.query(models.Choices).filter(models.Choices.question_id == question_id).delete()
+
+    # Add new choices
+    for choice in updated_question.choices:
+        db_choice = models.Choices(
+            choice_text=choice.choice_text,
+            is_correct=choice.is_correct,
+            question_id=question_id
+        )
+        db.add(db_choice)
+
+    db.commit()
+    db.refresh(db_question)
+    return {"message": "Question updated successfully"}
+
+@app.delete("/questions/{question_id}")
+async def delete_question(
+    question_id: int,
+    db: db_dependency
+):
+    db_question = db.query(models.Questions).filter(models.Questions.id == question_id).first()
+
+    if not db_question:
+        raise HTTPException(status_code=404, detail="Question not found")
+
+    db.delete(db_question)
+    db.commit()
+    return {"message": "Question deleted successfully"}
+
+
