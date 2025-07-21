@@ -1,5 +1,5 @@
 from multiprocessing.resource_tracker import getfd
-from fastapi import Fastapi , HTTPException, Depends
+from fastapi import FastAPI , HTTPException, Depends
 from pydantic import BaseModel
 from typing import List , Annotated
 import models
@@ -7,7 +7,7 @@ from database import engine , SessionLocal
 from sqlalchemy.orm import Session
 models.Base.metadata.create_all(bind=engine) 
 
-app = Fastapi()
+app = FastAPI()
 
 class ChoiceBase(BaseModel):
     choice_text: str
@@ -24,16 +24,40 @@ def get_db():
         finally:
             db.close()
             
-db_dependency = Annotated[Session,Depends(get_db)]            
+db_dependency = Annotated[Session,Depends(get_db)]    
+
+@app.get("/questions/{question_id}")
+async def get_question(question_id: int, db: db_dependency):
+    result = db.query(models.Questions).filter(models.Questions.id == question_id).first()
+
+    if not result:
+        raise HTTPException(status_code=404, detail="Question not found")
+
+    return result   
+
+@app.get("/choices/{question_Id}")
+async def read_choices(question_id:int , db:db_dependency):
+    result = db.query(models.Choices).filter(models.Choices.question_id==question_id)
+    if not result:
+        raise HTTPException(status_code= 505 , detail="sorry choices not found")
+    return result
+    
 
 @app.post("/questions/")
-async def create_questions(Question:QuestionBase , db:db_dependency):
+async def create_questions(Question: QuestionBase, db: db_dependency):
     db_question = models.Questions(question_text=Question.question_text)
     db.add(db_question)
     db.commit()
     db.refresh(db_question)
+
     for choice in Question.choices:
-        db_choice = models.Choices(choice_text=choice.choice_text , is_correct=choice.is_correct , question_id = db.question.id)
+        db_choice = models.Choices(
+            choice_text=choice.choice_text,
+            is_correct=choice.is_correct,
+            question_id=db_question.id
+        )
         db.add(db_choice)
+
     db.commit()
-        
+    return {"message": "Question and choices saved successfully"}
+
